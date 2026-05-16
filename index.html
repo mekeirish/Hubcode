@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Hubcode - Repository Manager</title>
+    <style>
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+        :root { 
+            --bg: #1e1e22; 
+            --card-bg: #1e1e22; 
+            --shadow-dark: #111113; 
+            --shadow-light: #2b2b31; 
+            --accent: #ffca28; 
+            --text: #c9d1d9; 
+            --danger: #f85149; 
+            --success: #7ee787; 
+            --blue: #58a6ff;
+        }
+        
+        body { 
+            background: var(--bg); 
+            color: var(--text); 
+            font-family: -apple-system, system-ui, sans-serif; 
+            padding: 15px; 
+            margin: 0;
+            display: flex; 
+            flex-direction: column; 
+            min-height: 100vh; 
+        }
+        
+        .card { 
+            background: var(--card-bg); 
+            padding: 20px; 
+            border-radius: 16px; 
+            box-shadow: 6px 6px 12px var(--shadow-dark), -6px -6px 12px var(--shadow-light); 
+            border: none; 
+            margin-bottom: 20px; 
+        }
+        
+        h2 { font-size: 1.1rem; text-transform: uppercase; letter-spacing: 1px; color: var(--accent); margin-top: 0; }
+        
+        input { 
+            width: 100%; 
+            margin: 8px 0; 
+            padding: 14px; 
+            border-radius: 12px; 
+            border: none; 
+            background: var(--bg); 
+            color: white; 
+            box-sizing: border-box; 
+            box-shadow: inset 4px 4px 8px var(--shadow-dark), inset -4px -4px 8px var(--shadow-light); 
+            outline: none;
+            font-size: 13px;
+        }
+        
+        button.btn { 
+            width: 100%; 
+            padding: 15px; 
+            border-radius: 12px; 
+            border: none; 
+            font-weight: bold; 
+            cursor: pointer; 
+            margin-top: 5px; 
+            transition: all 0.2s ease; 
+            background: var(--card-bg); 
+            box-shadow: 5px 5px 10px var(--shadow-dark), -5px -5px 10px var(--shadow-light); 
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        
+        button.btn:active { 
+            box-shadow: inset 4px 4px 8px var(--shadow-dark), inset -4px -4px 8px var(--shadow-light); 
+            transform: scale(0.99); 
+        }
+        
+        .yellow-btn { color: var(--accent); }
+        .red-btn { color: var(--danger); }
+        
+        /* Liste des dépôts */
+        .repo-list {
+            margin-top: 15px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+        
+        .repo-item {
+            background: var(--card-bg);
+            padding: 14px;
+            border-radius: 14px;
+            box-shadow: 4px 4px 8px var(--shadow-dark), -2px -2px 6px var(--shadow-light);
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        
+        .repo-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            font-weight: bold;
+            font-size: 0.9rem;
+            color: #fff;
+        }
+        
+        /* Ligne unique d'actions optimisée mobile */
+        .repo-actions-row {
+            display: flex;
+            gap: 5px;
+            width: 100%;
+            overflow-x: auto; /* Permet le glissement horizontal fluide si l'écran est très petit */
+            padding-bottom: 2px;
+        }
+        
+        .action-btn {
+            flex: 1;
+            min-width: 48px;
+            padding: 10px 4px;
+            border: none;
+            border-radius: 8px;
+            background: var(--bg);
+            color: var(--text);
+            font-size: 11px;
+            font-weight: bold;
+            text-transform: uppercase;
+            cursor: pointer;
+            box-shadow: 2px 2px 5px var(--shadow-dark), -1px -1px 3px var(--shadow-light);
+            text-align: center;
+        }
+        
+        .action-btn:active {
+            box-shadow: inset 2px 2px 4px var(--shadow-dark);
+        }
+        
+        .btn-html { color: var(--blue); }
+        .btn-json { color: var(--accent); }
+        .btn-sw { color: var(--success); }
+        .btn-view { color: #fff; background: #3a3a42; }
+        .btn-sup { color: var(--danger); }
+        
+        /* Télémétrie d'activité */
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            display: inline-block;
+            transition: all 0.3s ease;
+        }
+        .dot-idle { background: var(--success); box-shadow: 0 0 8px var(--success); }
+        .dot-active { background: var(--accent); box-shadow: 0 0 10px var(--accent); animation: blink 0.8s infinite alternate; }
+        
+        @keyframes blink { from { opacity: 0.4; } to { opacity: 1; } }
+        
+        /* Bandeau de confirmation interne sécurisé (Zéro Popup) */
+        .confirm-panel {
+            background: #1a1a1d;
+            border: 1px solid var(--danger);
+            border-radius: 12px;
+            padding: 12px;
+            margin-top: 8px;
+            display: none;
+            flex-direction: column;
+            gap: 8px;
+            text-align: center;
+            font-size: 12px;
+        }
+        
+        .confirm-buttons {
+            display: flex;
+            gap: 10px;
+        }
+        
+        .confirm-btn {
+            flex: 1;
+            padding: 8px;
+            border: none;
+            border-radius: 6px;
+            font-weight: bold;
+            cursor: pointer;
+            text-transform: uppercase;
+            font-size: 11px;
+        }
+        
+        .signature {
+            text-align: center;
+            font-size: 11px;
+            color: #555;
+            margin-top: auto;
+            padding-top: 30px;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
+    </style>
+
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#4b6cb7">
+<link rel="apple-touch-icon" href="icon.png"></head>
+<body>
+
+    <div class="card">
+        <h2>Hubcode - Repositories</h2>
+        <input type="password" id="githubToken" placeholder="Entre ton GitHub Token secret...">
+        <button class="btn yellow-btn" onclick="fetchRepositories()">🔄 CHARGER LES DEPÔTS</button>
+    </div>
+
+    <div class="card" style="flex: 1;">
+        <div style="display: flex; align-items: center; justify-content: space-between;">
+            <span style="font-size: 0.75rem; text-transform: uppercase; color: #888; letter-spacing: 1px;">Liste des projets</span>
+            <div style="display: flex; align-items: center; gap: 6px; font-size: 11px; color: #666;">
+                <span class="status-dot dot-idle" id="globalStatus"></span> <span id="statusText">PRÊT</span>
+            </div>
+        </div>
+        
+        <div class="repo-list" id="repoListContainer">
+            <!-- Les lignes de dépôts s'injecteront ici -->
+        </div>
+    </div>
+
+    <div class="signature">Made by Brahim Laiche 2026 Paris</div>
+
+<script>
+    // --- Persistance automatique du token ---
+    window.onload = function() {
+        const savedToken = localStorage.getItem('hubcode_token');
+        if (savedToken) {
+            document.getElementById('githubToken').value = savedToken;
+        }
+    };
+
+    // --- Gestion globale de l'état d'activité des voyants ---
+    function setActivityState(isActive, message = "") {
+        const dot = document.getElementById('globalStatus');
+        const text = document.getElementById('statusText');
+        if(isActive) {
+            dot.className = "status-dot dot-active";
+            text.innerText = message || "TRAITEMENT GITHUB...";
+            text.style.color = "var(--accent)";
+        } else {
+            dot.className = "status-dot dot-idle";
+            text.innerText = "PRÊT";
+            text.style.color = "#666";
+        }
+    }
+
+    // --- Récupération des dépôts depuis GitHub API ---
+    async function fetchRepositories() {
+        const token = document.getElementById('githubToken').value.trim();
+        if(!token) { alert("Token manquant"); return; }
+        
+        localStorage.setItem('hubcode_token', token);
+        setActivityState(true, "CHARGEMENT...");
+
+        try {
+            const response = await fetch('https://api.github.com/user/repos?per_page=100&sort=updated', {
+                headers: { 'Authorization': `token ${token}` }
+            });
+            if(!response.ok) throw new Error("Impossible de récupérer les dépôts");
+            
+            const repos = await response.ok ? await response.json() : [];
+            renderRepos(repos, token);
+        } catch (err) {
+            alert(err.message);
+        } finally {
+            setActivityState(false);
+        }
+    }
+
+    // --- Injection HTML des éléments en ligne ---
+    function renderRepos(repos, token) {
+        const container = document.getElementById('repoListContainer');
+        container.innerHTML = "";
+        
+        if(repos.length === 0) {
+            container.innerHTML = "<div style='text-align:center; color:#555; padding-top:20px;'>Aucun dépôt trouvé.</div>";
+            return;
+        }
+
+        repos.forEach(repo => {
+            const repoRow = document.createElement('div');
+            repoRow.className = 'repo-item';
+            repoRow.id = `repo-${repo.name}`;
+            
+            repoRow.innerHTML = `
+                <div class="repo-header">
+                    <span>${repo.name}</span>
+                </div>
+                <!-- Une seule ligne d'actions chirurgicale -->
+                <div class="repo-actions-row">
+                    <button class="action-btn btn-html" onclick="copyGitFile('${repo.owner.login}', '${repo.name}', 'index.html')">HTML</button>
+                    <button class="action-btn btn-json" onclick="copyGitFile('${repo.owner.login}', '${repo.name}', 'manifest.json')">JSON</button>
+                    <button class="action-btn btn-sw" onclick="copyGitFile('${repo.owner.login}', '${repo.name}', 'sw.js')">SW</button>
+                    <button class="action-btn btn-view" onclick="viewLivePage('${repo.owner.login}', '${repo.name}')">VIEW</button>
+                    <button class="action-btn btn-sup" onclick="showConfirmPanel('${repo.name}')">SUP</button>
+                </div>
+                
+                <!-- Panneau de confirmation interne et sécurisé (Pas de popup) -->
+                <div class="confirm-panel" id="confirm-${repo.name}">
+                    <span style="color:var(--danger); font-weight:bold;">Supprimer définitivement ${repo.name} ?</span>
+                    <div class="confirm-buttons">
+                        <button class="confirm-btn" style="background:var(--danger); color:white;" onclick="deleteRepository('${repo.owner.login}', '${repo.name}')">CONFIRMER</button>
+                        <button class="confirm-btn" style="background:#333; color:white;" onclick="hideConfirmPanel('${repo.name}')">ANNULER</button>
+                    </div>
+                </div>
+            `;
+            container.appendChild(repoRow);
+        });
+    }
+
+    // --- Extraction et copie d'un fichier à la source ---
+    async function copyGitFile(owner, repo, filename) {
+        const token = localStorage.getItem('hubcode_token');
+        setActivityState(true, `RECUPÉRATION ${filename.toUpperCase()}...`);
+        
+        try {
+            const response = await fetch(`https://api.github.com/repos/${owner}/${repo}/contents/${filename}`, {
+                headers: { 'Authorization': `token ${token}` }
+            });
+            
+            if(!response.ok) throw new Error(`Fichier ${filename} introuvable dans ce dépôt.`);
+            
+            const data = await response.json();
+            // Décodage du contenu stocké en Base64 par l'API GitHub
+            const cleanContent = decodeURIComponent(escape(atob(data.content)));
+            
+            await navigator.clipboard.writeText(cleanContent);
+            alert(`Contenu de ${filename} copié avec succès !`);
+        } catch (err) {
+            alert(err.message);
+        } finally {
+            setActivityState(false);
+        }
+    }
+
+    // --- Redirection Directe vers le Rendu de Production ---
+    function viewLivePage(owner, repo) {
+        // Nettoyage forcé des casses pour coller au protocole de routage de tes PWA
+        const cleanUser = owner.toLowerCase();
+        const cleanRepo = repo; 
+        const liveUrl = `https://${cleanUser}.github.io/${cleanRepo}/`;
+        window.open(liveUrl, '_blank');
+    }
+
+    // --- Gestion Interne du Module de Suppression Éco-responsable (Sans Popup) ---
+    function showConfirmPanel(repoName) {
+        document.getElementById(`confirm-${repoName}`).style.display = 'flex';
+    }
+
+    function hideConfirmPanel(repoName) {
+        document.getElementById(`confirm-${repoName}`).style.display = 'none';
+    }
+
+    async function deleteRepository(owner, repoName) {
+        const token = localStorage.getItem('hubcode_token');
+        hideConfirmPanel(repoName);
+        setActivityState(true, "SUPPRESSION REPO...");
+
+        try {
+            const response = await fetch(`https://api.github.com/repos/${owner}/${repoName}`, {
+                method: 'DELETE',
+                headers: { 'Authorization': `token ${token}` }
+            });
+            
+            if (response.status === 240 || response.status === 204) {
+                // Retrait physique de la ligne de l'écran tactile
+                const element = document.getElementById(`repo-${repoName}`);
+                if(element) element.remove();
+                alert(`Le dépôt ${repoName} a été supprimé.`);
+            } else {
+                throw new Error("Erreur ou droits insuffisants pour supprimer ce dépôt (Vérifie la portée 'delete_repo' de ton Token).");
+            }
+        } catch (err) {
+            alert(err.message);
+        } finally {
+            setActivityState(false);
+        }
+    }
+</script>
+
+<script>
+    if('serviceWorker' in navigator){
+        window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js'));
+    }
+</script>
+
+<script>if('serviceWorker' in navigator){window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js'));}</script>
+</body>
+</html>
