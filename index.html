@@ -2,386 +2,613 @@
 <html lang="fr">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Hubcode - Repository Manager</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Gestionnaire de Produits</title>
     <style>
-        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-        :root { 
-            --bg: #1e1e22; 
-            --card-bg: #1e1e22; 
-            --shadow-dark: #111113; 
-            --shadow-light: #2b2b31; 
-            --accent: #ffca28; 
-            --text: #c9d1d9; 
-            --danger: #f85149; 
-            --success: #7ee787; 
-            --blue: #58a6ff;
-        }
-        
-        body { 
-            background: var(--bg); 
-            color: var(--text); 
-            font-family: -apple-system, system-ui, sans-serif; 
-            padding: 15px; 
+        /* Configuration de base pour smartphone */
+        * {
+            box-sizing: border-box;
             margin: 0;
-            display: flex; 
-            flex-direction: column; 
-            min-height: 100vh; 
+            padding: 0;
+            -webkit-tap-highlight-color: transparent;
         }
-        
-        .card { 
-            background: var(--card-bg); 
-            padding: 20px; 
-            border-radius: 16px; 
-            box-shadow: 6px 6px 12px var(--shadow-dark), -6px -6px 12px var(--shadow-light); 
-            border: none; 
-            margin-bottom: 20px; 
-        }
-        
-        h2 { font-size: 1.1rem; text-transform: uppercase; letter-spacing: 1px; color: var(--accent); margin-top: 0; }
-        
-        input { 
-            width: 100%; 
-            margin: 8px 0; 
-            padding: 14px; 
-            border-radius: 12px; 
-            border: none; 
-            background: var(--bg); 
-            color: white; 
-            box-sizing: border-box; 
-            box-shadow: inset 4px 4px 8px var(--shadow-dark), inset -4px -4px 8px var(--shadow-light); 
-            outline: none;
-            font-size: 13px;
-        }
-        
-        button.btn { 
-            width: 100%; 
-            padding: 15px; 
-            border-radius: 12px; 
-            border: none; 
-            font-weight: bold; 
-            cursor: pointer; 
-            margin-top: 5px; 
-            transition: all 0.2s ease; 
-            background: var(--card-bg); 
-            box-shadow: 5px 5px 10px var(--shadow-dark), -5px -5px 10px var(--shadow-light); 
-            text-transform: uppercase;
-            letter-spacing: 1px;
-        }
-        
-        button.btn:active { 
-            box-shadow: inset 4px 4px 8px var(--shadow-dark), inset -4px -4px 8px var(--shadow-light); 
-            transform: scale(0.99); 
-        }
-        
-        .yellow-btn { color: var(--accent); }
-        .red-btn { color: var(--danger); }
-        
-        /* Liste des dépôts */
-        .repo-list {
-            margin-top: 15px;
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: #1e1e24;
+            color: #e0e0e6;
+            min-height: 100vh;
             display: flex;
             flex-direction: column;
-            gap: 12px;
-        }
-        
-        .repo-item {
-            background: var(--card-bg);
-            padding: 14px;
-            border-radius: 14px;
-            box-shadow: 4px 4px 8px var(--shadow-dark), -2px -2px 6px var(--shadow-light);
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-        }
-        
-        .repo-header {
-            display: flex;
             align-items: center;
-            justify-content: space-between;
-            font-weight: bold;
-            font-size: 0.9rem;
-            color: #fff;
+            padding: 16px;
         }
-        
-        /* Ligne unique d'actions optimisée mobile */
-        .repo-actions-row {
-            display: flex;
-            gap: 5px;
+
+        /* Conteneur principal */
+        .app-container {
             width: 100%;
-            overflow-x: auto; /* Permet le glissement horizontal fluide si l'écran est très petit */
-            padding-bottom: 2px;
-        }
-        
-        .action-btn {
+            max-width: 480px;
             flex: 1;
-            min-width: 48px;
-            padding: 10px 4px;
-            border: none;
-            border-radius: 8px;
-            background: var(--bg);
-            color: var(--text);
-            font-size: 11px;
-            font-weight: bold;
-            text-transform: uppercase;
-            cursor: pointer;
-            box-shadow: 2px 2px 5px var(--shadow-dark), -1px -1px 3px var(--shadow-light);
-            text-align: center;
-        }
-        
-        .action-btn:active {
-            box-shadow: inset 2px 2px 4px var(--shadow-dark);
-        }
-        
-        .btn-html { color: var(--blue); }
-        .btn-json { color: var(--accent); }
-        .btn-sw { color: var(--success); }
-        .btn-view { color: #fff; background: #3a3a42; }
-        .btn-sup { color: var(--danger); }
-        
-        /* Télémétrie d'activité */
-        .status-dot {
-            width: 10px;
-            height: 10px;
-            border-radius: 50%;
-            display: inline-block;
-            transition: all 0.3s ease;
-        }
-        .dot-idle { background: var(--success); box-shadow: 0 0 8px var(--success); }
-        .dot-active { background: var(--accent); box-shadow: 0 0 10px var(--accent); animation: blink 0.8s infinite alternate; }
-        
-        @keyframes blink { from { opacity: 0.4; } to { opacity: 1; } }
-        
-        /* Bandeau de confirmation interne sécurisé (Zéro Popup) */
-        .confirm-panel {
-            background: #1a1a1d;
-            border: 1px solid var(--danger);
-            border-radius: 12px;
-            padding: 12px;
-            margin-top: 8px;
-            display: none;
-            flex-direction: column;
-            gap: 8px;
-            text-align: center;
-            font-size: 12px;
-        }
-        
-        .confirm-buttons {
             display: flex;
-            gap: 10px;
+            flex-direction: column;
+            position: relative;
         }
-        
-        .confirm-btn {
-            flex: 1;
-            padding: 8px;
-            border: none;
-            border-radius: 6px;
-            font-weight: bold;
-            cursor: pointer;
-            text-transform: uppercase;
-            font-size: 11px;
-        }
-        
-        .signature {
+
+        header {
             text-align: center;
-            font-size: 11px;
-            color: #555;
-            margin-top: auto;
-            padding-top: 30px;
-            text-transform: uppercase;
-            letter-spacing: 2px;
+            margin-bottom: 20px;
+            position: relative;
+            width: 100%;
+        }
+
+        header h1 {
+            font-size: 1.5rem;
+            font-weight: 600;
+            color: #ffffff;
+            letter-spacing: 0.5px;
+        }
+
+        /* Tout petit bouton admin jaune orangé en haut à droite */
+        .btn-admin-toggle {
+            position: absolute;
+            top: 4px;
+            right: 0;
+            background: #ff9f43;
+            color: #1e1e24;
+            border: none;
+            padding: 4px 10px;
+            font-size: 0.75rem;
+            font-weight: bold;
+            border-radius: 8px;
+            cursor: pointer;
+            box-shadow: 0 2px 8px rgba(255, 159, 67, 0.3);
+        }
+
+        .btn-admin-toggle.logged-in {
+            background: #4caf50;
+            color: white;
+            box-shadow: 0 2px 8px rgba(76, 175, 80, 0.3);
+        }
+
+        /* Grille à deux colonnes */
+        .grid-products {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 16px;
+            width: 100%;
+            margin-bottom: 40px;
+        }
+
+        /* Style des carreaux (Skeuomorphisme / Neumorphism léger) */
+        .tile {
+            aspect-ratio: 1 / 1;
+            background: #25252b;
+            border-radius: 20px;
+            border: 1px solid #2d2d35;
+            box-shadow: inset 1px 1px 2px rgba(255,255,255,0.05), 
+                        4px 4px 10px rgba(0,0,0,0.3);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            position: relative;
+            overflow: hidden;
+            transition: transform 0.2s ease;
+        }
+
+        .tile:active {
+            transform: scale(0.97);
+        }
+
+        /* Bouton Ajouter (+) caché par défaut */
+        .btn-add {
+            font-size: 3rem;
+            color: #4a4a5a;
+            font-weight: 300;
+            cursor: pointer;
+            width: 100%;
+            height: 100%;
+            display: none; /* Masqué pour les non-admins */
+            justify-content: center;
+            align-items: center;
+        }
+
+        /* Visible uniquement si l'application est en mode admin */
+        body.is-admin .btn-add {
+            display: flex;
+        }
+
+        .tile.active .btn-add {
+            color: #00adb5;
+        }
+
+        /* Affichage du produit */
+        .product-display {
+            width: 100%;
+            height: 100%;
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-end;
+            padding: 12px;
+        }
+
+        .product-bg {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            z-index: 1;
+            opacity: 0.7;
+        }
+
+        .product-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(to top, rgba(15,15,18,0.9) 0%, rgba(15,15,18,0.4) 50%, rgba(0,0,0,0) 100%);
+            z-index: 2;
+        }
+
+        .product-info {
+            position: relative;
+            z-index: 3;
+            color: #ffffff;
+        }
+
+        .product-name {
+            font-size: 1rem;
+            font-weight: 600;
+            margin-bottom: 4px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .product-details {
+            font-size: 0.8rem;
+            color: #b0b0b8;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        /* Positionnement dans la moitié haute de l'écran */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(15, 15, 18, 0.85);
+            backdrop-filter: blur(4px);
+            -webkit-backdrop-filter: blur(4px);
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            padding-top: 40px;
+            z-index: 1000;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s ease;
+        }
+
+        .modal-overlay.open {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        /* Look original ajusté pour le haut de l'écran */
+        .modal-content {
+            width: 90%;
+            max-width: 440px;
+            background: #25252b;
+            border-radius: 24px;
+            padding: 24px;
+            box-shadow: 0 12px 32px rgba(0,0,0,0.6);
+            transform: translateY(-50px);
+            transition: transform 0.3s cubic-bezier(0.1, 0.76, 0.55, 0.94);
+        }
+
+        .modal-overlay.open .modal-content {
+            transform: translateY(0);
+        }
+
+        .modal-title {
+            font-size: 1.25rem;
+            margin-bottom: 20px;
+            color: #ffffff;
+            text-align: center;
+        }
+
+        /* Formulaire */
+        .form-group {
+            margin-bottom: 16px;
+        }
+
+        .form-group label {
+            display: block;
+            font-size: 0.85rem;
+            color: #a0a0aa;
+            margin-bottom: 6px;
+        }
+
+        .form-control {
+            width: 100%;
+            background: #1e1e24;
+            border: 1px solid #33333c;
+            border-radius: 12px;
+            padding: 12px 16px;
+            color: #ffffff;
+            font-size: 16px;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+
+        .form-control:focus {
+            border-color: #00adb5;
+        }
+
+        /* Zone d'upload photo */
+        .file-upload-wrapper {
+            position: relative;
+            width: 100%;
+            background: #1e1e24;
+            border: 1px dashed #4a4a5a;
+            border-radius: 12px;
+            padding: 14px;
+            text-align: center;
+            cursor: pointer;
+            margin-bottom: 24px;
+        }
+
+        .file-upload-wrapper input[type="file"] {
+            position: absolute;
+            left: 0;
+            top: 0;
+            opacity: 0;
+            width: 100%;
+            height: 100%;
+            cursor: pointer;
+        }
+
+        .file-upload-text {
+            font-size: 0.9rem;
+            color: #00adb5;
+        }
+
+        /* Bouton Valider */
+        .btn-submit {
+            width: 100%;
+            background: #00adb5;
+            color: #ffffff;
+            border: none;
+            border-radius: 14px;
+            padding: 15px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            box-shadow: 0 4px 12px rgba(0, 173, 181, 0.3);
+        }
+
+        .btn-submit:active {
+            background: #008c92;
+        }
+
+        /* Pavé numérique d'authentification interne */
+        .keypad-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .keypad-display {
+            width: 100%;
+            background: #1e1e24;
+            border-radius: 12px;
+            padding: 14px;
+            text-align: center;
+            font-size: 1.5rem;
+            letter-spacing: 8px;
+            color: #ff9f43;
+            margin-bottom: 20px;
+            height: 58px;
+            border: 1px solid #33333c;
+        }
+
+        .keypad-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 12px;
+            width: 100%;
+            max-width: 280px;
+        }
+
+        .keypad-btn {
+            background: #1e1e24;
+            color: #ffffff;
+            border: 1px solid #33333c;
+            border-radius: 50%;
+            aspect-ratio: 1 / 1;
+            font-size: 1.25rem;
+            font-weight: 600;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            cursor: pointer;
+            box-shadow: 2px 2px 6px rgba(0,0,0,0.3);
+        }
+
+        .keypad-btn:active {
+            background: #ff9f43;
+            color: #1e1e24;
+        }
+
+        .keypad-btn.clear {
+            color: #ff4d4d;
+            font-size: 0.9rem;
+        }
+
+        /* Signature demandée */
+        footer {
+            text-align: center;
+            padding: 20px 0 10px 0;
+            font-size: 0.75rem;
+            color: #4a4a5a;
+            letter-spacing: 0.5px;
         }
     </style>
 
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#4b6cb7">
+<link rel="apple-touch-icon" href="icon.png">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#4b6cb7">
 <link rel="apple-touch-icon" href="icon.png"></head>
 <body>
 
-    <div class="card">
-        <h2>Hubcode</h2>
-        <input type="password" id="githubToken" placeholder="Entre ton GitHub Token secret...">
-        <button class="btn yellow-btn" onclick="fetchRepositories()">🔄 CHARGER LES DEPÔTS</button>
+    <div class="app-container">
+        <header>
+            <h1>Mes Produits</h1>
+            <!-- Bouton Admin Jaune Orangé -->
+            <button class="btn-admin-toggle" id="adminToggleBtn" onclick="playHumSound(); handleAdminButtonClick()">Admin</button>
+        </header>
+
+        <!-- Grille extensible -->
+        <main class="grid-products" id="gridProducts">
+            <div class="tile active" id="tile-0">
+                <div class="btn-add" onclick="playHumSound(); openProductModal(0)">+</div>
+            </div>
+        </main>
+
+        <footer>
+            Laiche Mohamed Abdeldjalil 2026
+        </footer>
     </div>
 
-    <div class="card" style="flex: 1;">
-        <div style="display: flex; align-items: center; justify-content: space-between;">
-            <span style="font-size: 0.75rem; text-transform: uppercase; color: #888; letter-spacing: 1px;">Liste des projets</span>
-            <div style="display: flex; align-items: center; gap: 6px; font-size: 11px; color: #666;">
-                <span class="status-dot dot-idle" id="globalStatus"></span> <span id="statusText">PRÊT</span>
+    <!-- Modal Formulaire Nouveau Produit -->
+    <div class="modal-overlay" id="modalOverlay" onclick="closeProductModal(event)">
+        <div class="modal-content" id="modalContent" onclick="event.stopPropagation()">
+            <div class="modal-title">Nouveau Produit</div>
+            
+            <form id="productForm" onsubmit="handleFormSubmit(event)">
+                <div class="form-group">
+                    <label for="prodName">Nom du produit</label>
+                    <input type="text" id="prodName" class="form-control" required autocomplete="off">
+                </div>
+
+                <div class="form-group">
+                    <label for="prodQty">Quantité</label>
+                    <input type="number" id="prodQty" class="form-control" required min="1" inputmode="numeric">
+                </div>
+
+                <div class="form-group">
+                    <label for="prodPrice">Prix (€)</label>
+                    <input type="number" id="prodPrice" class="form-control" step="0.01" required min="0" inputmode="decimal">
+                </div>
+
+                <div class="file-upload-wrapper" onclick="playHumSound()">
+                    <span class="file-upload-text" id="uploadStatus">📸 Ajouter une photo</span>
+                    <input type="file" id="prodImage" accept="image/*" onchange="handleFileChange(event)">
+                </div>
+
+                <button type="submit" class="btn-submit" onclick="playHumSound()">Valider</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal Pavé Numérique Interne (Pas de popup système) -->
+    <div class="modal-overlay" id="keypadOverlay" onclick="closeKeypadModal()">
+        <div class="modal-content" onclick="event.stopPropagation()">
+            <div class="modal-title" style="color: #ff9f43;">Code Administrateur</div>
+            <div class="keypad-container">
+                <div class="keypad-display" id="keypadDisplay"></div>
+                <div class="keypad-grid">
+                    <div class="keypad-btn" onclick="playHumSound(); pressKey('1')">1</div>
+                    <div class="keypad-btn" onclick="playHumSound(); pressKey('2')">2</div>
+                    <div class="keypad-btn" onclick="playHumSound(); pressKey('3')">3</div>
+                    <div class="keypad-btn" onclick="playHumSound(); pressKey('4')">4</div>
+                    <div class="keypad-btn" onclick="playHumSound(); pressKey('5')">5</div>
+                    <div class="keypad-btn" onclick="playHumSound(); pressKey('6')">6</div>
+                    <div class="keypad-btn" onclick="playHumSound(); pressKey('7')">7</div>
+                    <div class="keypad-btn" onclick="playHumSound(); pressKey('8')">8</div>
+                    <div class="keypad-btn" onclick="playHumSound(); pressKey('9')">9</div>
+                    <div class="keypad-btn clear" onclick="playHumSound(); pressKey('C')">C</div>
+                    <div class="keypad-btn" onclick="playHumSound(); pressKey('0')">0</div>
+                    <div class="keypad-btn" style="color: #4caf50; font-size: 1.5rem;" onclick="playHumSound(); pressKey('E')">✓</div>
+                </div>
             </div>
         </div>
-        
-        <div class="repo-list" id="repoListContainer">
-            <!-- Les lignes de dépôts s'injecteront ici -->
-        </div>
     </div>
 
-    <div class="signature">Made by Brahim Laiche 2026 Paris</div>
+    <script>
+        let currentTileIndex = 0;
+        let selectedImageDataUrl = "";
+        let isAdmin = false;
+        let enteredCode = "";
 
-<script>
-    // --- Persistance automatique du token ---
-    window.onload = function() {
-        const savedToken = localStorage.getItem('hubcode_token');
-        if (savedToken) {
-            document.getElementById('githubToken').value = savedToken;
+        const modalOverlay = document.getElementById('modalOverlay');
+        const keypadOverlay = document.getElementById('keypadOverlay');
+        const keypadDisplay = document.getElementById('keypadDisplay');
+        const adminToggleBtn = document.getElementById('adminToggleBtn');
+        const gridProducts = document.getElementById('gridProducts');
+        const productForm = document.getElementById('productForm');
+        const uploadStatus = document.getElementById('uploadStatus');
+
+        // Synthétiseur audio : Hum Générateur Industriel (Harmonique Sine, 100Hz doublé, Gate 250ms)
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+        function playHumSound() {
+            if (audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
+
+            const now = audioCtx.currentTime;
+            const duration = 0.250;
+
+            const masterGain = audioCtx.createGain();
+            masterGain.gain.setValueAtTime(0.3, now);
+            masterGain.gain.setValueAtTime(0.3, now + duration - 0.01);
+            masterGain.gain.linearRampToValueAtTime(0, now + duration);
+
+            const osc1 = audioCtx.createOscillator();
+            osc1.type = 'sine';
+            osc1.frequency.setValueAtTime(100, now);
+
+            const osc2 = audioCtx.createOscillator();
+            osc2.type = 'sine';
+            osc2.frequency.setValueAtTime(200, now);
+
+            osc1.connect(masterGain);
+            osc2.connect(masterGain);
+            masterGain.connect(audioCtx.destination);
+
+            osc1.start(now);
+            osc2.start(now);
+            osc1.stop(now + duration);
+            osc2.stop(now + duration);
         }
-    };
 
-    // --- Gestion globale de l'état d'activité des voyants ---
-    function setActivityState(isActive, message = "") {
-        const dot = document.getElementById('globalStatus');
-        const text = document.getElementById('statusText');
-        if(isActive) {
-            dot.className = "status-dot dot-active";
-            text.innerText = message || "TRAITEMENT GITHUB...";
-            text.style.color = "var(--accent)";
-        } else {
-            dot.className = "status-dot dot-idle";
-            text.innerText = "PRÊT";
-            text.style.color = "#666";
+        // Gestion du bouton Admin
+        function handleAdminButtonClick() {
+            if (isAdmin) {
+                // Déconnexion si déjà connecté
+                isAdmin = false;
+                document.body.classList.remove('is-admin');
+                adminToggleBtn.textContent = "Admin";
+                adminToggleBtn.classList.remove('logged-in');
+            } else {
+                // Ouvre le pavé numérique interne
+                enteredCode = "";
+                keypadDisplay.textContent = "";
+                keypadOverlay.classList.add('open');
+            }
         }
-    }
 
-    // --- Récupération des dépôts depuis GitHub API ---
-    async function fetchRepositories() {
-        const token = document.getElementById('githubToken').value.trim();
-        if(!token) { alert("Token manquant"); return; }
-        
-        localStorage.setItem('hubcode_token', token);
-        setActivityState(true, "CHARGEMENT...");
+        function closeKeypadModal() {
+            keypadOverlay.classList.remove('open');
+        }
 
-        try {
-            const response = await fetch('https://api.github.com/user/repos?per_page=100&sort=updated', {
-                headers: { 'Authorization': `token ${token}` }
-            });
-            if(!response.ok) throw new Error("Impossible de récupérer les dépôts");
+        // Logique du Pavé numérique
+        function pressKey(key) {
+            if (key === 'C') {
+                enteredCode = "";
+                keypadDisplay.textContent = "";
+            } else if (key === 'E') {
+                if (enteredCode === "1212") {
+                    isAdmin = true;
+                    document.body.classList.add('is-admin');
+                    adminToggleBtn.textContent = "✓ Admin";
+                    adminToggleBtn.classList.add('logged-in');
+                    closeKeypadModal();
+                } else {
+                    // Erreur temporaire visuelle en cas de mauvais code
+                    keypadDisplay.textContent = "ERREUR";
+                    enteredCode = "";
+                    setTimeout(() => { keypadDisplay.textContent = ""; }, 800);
+                }
+            } else {
+                if (enteredCode.length < 4) {
+                    enteredCode += key;
+                    keypadDisplay.textContent = "*".repeat(enteredCode.length);
+                }
+            }
+        }
+
+        function openProductModal(index) {
+            currentTileIndex = index;
+            modalOverlay.classList.add('open');
+        }
+
+        function closeProductModal(event) {
+            modalOverlay.classList.remove('open');
+            document.activeElement.blur(); 
+            resetForm();
+        }
+
+        function handleFileChange(event) {
+            const file = event.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    selectedImageDataUrl = e.target.result;
+                    uploadStatus.textContent = "✓ Image chargée";
+                    uploadStatus.style.color = "#4caf50";
+                };
+                reader.readAsDataURL(file);
+            }
+        }
+
+        function resetForm() {
+            productForm.reset();
+            selectedImageDataUrl = "";
+            uploadStatus.textContent = "📸 Ajouter une photo";
+            uploadStatus.style.color = "#00adb5";
+        }
+
+        function handleFormSubmit(event) {
+            event.preventDefault();
+
+            const name = document.getElementById('prodName').value;
+            const qty = document.getElementById('prodQty').value;
+            const price = document.getElementById('prodPrice').value;
+
+            const currentTile = document.getElementById(`tile-${currentTileIndex}`);
             
-            const repos = await response.ok ? await response.json() : [];
-            renderRepos(repos, token);
-        } catch (err) {
-            alert(err.message);
-        } finally {
-            setActivityState(false);
-        }
-    }
-
-    // --- Injection HTML des éléments en ligne ---
-    function renderRepos(repos, token) {
-        const container = document.getElementById('repoListContainer');
-        container.innerHTML = "";
-        
-        if(repos.length === 0) {
-            container.innerHTML = "<div style='text-align:center; color:#555; padding-top:20px;'>Aucun dépôt trouvé.</div>";
-            return;
-        }
-
-        repos.forEach(repo => {
-            const repoRow = document.createElement('div');
-            repoRow.className = 'repo-item';
-            repoRow.id = `repo-${repo.name}`;
-            
-            repoRow.innerHTML = `
-                <div class="repo-header">
-                    <span>${repo.name}</span>
-                </div>
-                <!-- Une seule ligne d'actions chirurgicale -->
-                <div class="repo-actions-row">
-                    <button class="action-btn btn-html" onclick="copyGitFile('${repo.owner.login}', '${repo.name}', 'index.html')">HTML</button>
-                    <button class="action-btn btn-json" onclick="copyGitFile('${repo.owner.login}', '${repo.name}', 'manifest.json')">JSON</button>
-                    <button class="action-btn btn-sw" onclick="copyGitFile('${repo.owner.login}', '${repo.name}', 'sw.js')">SW</button>
-                    <button class="action-btn btn-view" onclick="viewLivePage('${repo.owner.login}', '${repo.name}')">VIEW</button>
-                    <button class="action-btn btn-sup" onclick="showConfirmPanel('${repo.name}')">SUP</button>
-                </div>
-                
-                <!-- Panneau de confirmation interne et sécurisé (Pas de popup) -->
-                <div class="confirm-panel" id="confirm-${repo.name}">
-                    <span style="color:var(--danger); font-weight:bold;">Supprimer définitivement ${repo.name} ?</span>
-                    <div class="confirm-buttons">
-                        <button class="confirm-btn" style="background:var(--danger); color:white;" onclick="deleteRepository('${repo.owner.login}', '${repo.name}')">CONFIRMER</button>
-                        <button class="confirm-btn" style="background:#333; color:white;" onclick="hideConfirmPanel('${repo.name}')">ANNULER</button>
+            currentTile.innerHTML = `
+                <div class="product-display">
+                    ${selectedImageDataUrl ? `<img src="${selectedImageDataUrl}" class="product-bg" alt="">` : ''}
+                    <div class="product-overlay"></div>
+                    <div class="product-info">
+                        <div class="product-name">${name}</div>
+                        <div class="product-details">
+                            <span>Qté: ${qty}</span>
+                            <span>${price}€</span>
+                        </div>
                     </div>
                 </div>
             `;
-            container.appendChild(repoRow);
-        });
-    }
+            currentTile.classList.remove('active');
 
-    // --- Extraction et copie d'un fichier à la source ---
-    async function copyGitFile(owner, repo, filename) {
-        const token = localStorage.getItem('hubcode_token');
-        setActivityState(true, `RECUPÉRATION ${filename.toUpperCase()}...`);
-        
-        try {
-            const response = await fetch(`https://api.github.com/repos/${owner}/${repo}/contents/${filename}`, {
-                headers: { 'Authorization': `token ${token}` }
-            });
+            // Création du carré suivant (le bouton + héritera des règles CSS basées sur .is-admin)
+            currentTileIndex++;
+            const nextTile = document.createElement('div');
+            nextTile.className = 'tile active';
+            nextTile.id = `tile-${currentTileIndex}`;
+            nextTile.innerHTML = `<div class="btn-add" onclick="playHumSound(); openProductModal(${currentTileIndex})">+</div>`;
             
-            if(!response.ok) throw new Error(`Fichier ${filename} introuvable dans ce dépôt.`);
-            
-            const data = await response.json();
-            // Décodage du contenu stocké en Base64 par l'API GitHub
-            const cleanContent = decodeURIComponent(escape(atob(data.content)));
-            
-            await navigator.clipboard.writeText(cleanContent);
-            alert(`Contenu de ${filename} copié avec succès !`);
-        } catch (err) {
-            alert(err.message);
-        } finally {
-            setActivityState(false);
+            gridProducts.appendChild(nextTile);
+
+            // Fermeture douce
+            modalOverlay.classList.remove('open');
+            document.activeElement.blur();
+            resetForm();
         }
-    }
+    </script>
 
-    // --- Redirection Directe vers le Rendu de Production ---
-    function viewLivePage(owner, repo) {
-        // Nettoyage forcé des casses pour coller au protocole de routage de tes PWA
-        const cleanUser = owner.toLowerCase();
-        const cleanRepo = repo; 
-        const liveUrl = `https://${cleanUser}.github.io/${cleanRepo}/`;
-        window.open(liveUrl, '_blank');
-    }
-
-    // --- Gestion Interne du Module de Suppression Éco-responsable (Sans Popup) ---
-    function showConfirmPanel(repoName) {
-        document.getElementById(`confirm-${repoName}`).style.display = 'flex';
-    }
-
-    function hideConfirmPanel(repoName) {
-        document.getElementById(`confirm-${repoName}`).style.display = 'none';
-    }
-
-    async function deleteRepository(owner, repoName) {
-        const token = localStorage.getItem('hubcode_token');
-        hideConfirmPanel(repoName);
-        setActivityState(true, "SUPPRESSION REPO...");
-
-        try {
-            const response = await fetch(`https://api.github.com/repos/${owner}/${repoName}`, {
-                method: 'DELETE',
-                headers: { 'Authorization': `token ${token}` }
-            });
-            
-            if (response.status === 240 || response.status === 204) {
-                // Retrait physique de la ligne de l'écran tactile
-                const element = document.getElementById(`repo-${repoName}`);
-                if(element) element.remove();
-                alert(`Le dépôt ${repoName} a été supprimé.`);
-            } else {
-                throw new Error("Erreur ou droits insuffisants pour supprimer ce dépôt (Vérifie la portée 'delete_repo' de ton Token).");
-            }
-        } catch (err) {
-            alert(err.message);
-        } finally {
-            setActivityState(false);
-        }
-    }
-</script>
-
-<script>
-    if('serviceWorker' in navigator){
-        window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js'));
-    }
-</script>
+<script>if('serviceWorker' in navigator){window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js'));}</script>
 
 <script>if('serviceWorker' in navigator){window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js'));}</script>
 </body>
