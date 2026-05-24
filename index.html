@@ -215,6 +215,7 @@
         
         @keyframes blink { from { opacity: 0.4; } to { opacity: 1; } }
         
+        /* Panneaux de confirmation génériques */
         .confirm-panel {
             background: #1a1a1d;
             border: 1px solid var(--danger);
@@ -251,7 +252,7 @@
             transform: translateY(1px);
         }
 
-        /* Tracker Terminal (intégré dans le style néomorphique) */
+        /* Tracker Terminal */
         .tracker-terminal {
             background: #0a0c10;
             border-radius: 12px;
@@ -432,7 +433,7 @@
         }
     }
 
-    // ---------- RÉCUPÉRATION DES REPOS (tri temporel : plus récent en premier) ----------
+    // ---------- RÉCUPÉRATION DES REPOS (tri temporel) ----------
     async function fetchRepositories() {
         const token = document.getElementById('githubToken').value.trim();
         if(!token) { showNotification("Token requis", "danger"); return; }
@@ -444,7 +445,6 @@
             });
             if(!response.ok) throw new Error("Impossible de récupérer les dépôts");
             allRepositories = await response.json();
-            // Le tri est déjà fait par l'API grâce à sort=updated&direction=desc
             document.getElementById('repoSearch').value = "";
             renderRepos(allRepositories);
         } catch(err) {
@@ -658,7 +658,50 @@
         }
     }
 
-    // ---------- AUTRES FONCTIONS (copie, suppression, vue) ----------
+    // ---------- GESTION DES CONFIRMATIONS (rollback et suppression) ----------
+    function showRollbackConfirmPanel(repoName, owner, defaultBranch) {
+        // Masquer l'autre panneau si ouvert
+        hideConfirmPanel(repoName);
+        const panel = document.getElementById(`confirm-rollback-${repoName}`);
+        if (panel) panel.style.display = 'flex';
+    }
+    function hideRollbackConfirmPanel(repoName) {
+        const panel = document.getElementById(`confirm-rollback-${repoName}`);
+        if (panel) panel.style.display = 'none';
+    }
+    function showConfirmPanel(repoName) {
+        // Masquer le panneau de rollback
+        hideRollbackConfirmPanel(repoName);
+        const panel = document.getElementById(`confirm-${repoName}`);
+        if (panel) panel.style.display = 'flex';
+    }
+    function hideConfirmPanel(repoName) {
+        const panel = document.getElementById(`confirm-${repoName}`);
+        if (panel) panel.style.display = 'none';
+    }
+    // Fonction déclenchée après confirmation du rollback
+    async function confirmedRollback(owner, repo, defaultBranch) {
+        hideRollbackConfirmPanel(repo);
+        await revertToPreviousCommit(owner, repo, defaultBranch);
+    }
+    async function deleteRepository(owner, repoName) {
+        const token = localStorage.getItem('hubcode_token');
+        hideConfirmPanel(repoName);
+        setActivityState(true, "SUPPRESSION");
+        try {
+            const r = await fetch(`https://api.github.com/repos/${owner}/${repoName}`, {
+                method: 'DELETE', headers: { 'Authorization': `token ${token}` }
+            });
+            if (r.status === 204 || r.status === 240) {
+                allRepositories = allRepositories.filter(rp => rp.name !== repoName);
+                document.getElementById(`repo-${repoName}`)?.remove();
+                showNotification(`Dépôt supprimé`, 'success');
+            } else throw new Error("Droits insuffisants");
+        } catch(e) { showNotification(e.message, 'danger'); }
+        finally { setActivityState(false); }
+    }
+
+    // ---------- AUTRES FONCTIONS (copie, vue) ----------
     async function copyGitFile(owner, repo, filename) {
         const token = localStorage.getItem('hubcode_token');
         setActivityState(true, `COPIE ${filename}`);
@@ -679,30 +722,7 @@
         window.open(`https://${owner.toLowerCase()}.github.io/${repo}/?t=${Date.now()}`, '_blank');
     }
 
-    function showConfirmPanel(repoName) {
-        document.getElementById(`confirm-${repoName}`).style.display = 'flex';
-    }
-    function hideConfirmPanel(repoName) {
-        document.getElementById(`confirm-${repoName}`).style.display = 'none';
-    }
-    async function deleteRepository(owner, repoName) {
-        const token = localStorage.getItem('hubcode_token');
-        hideConfirmPanel(repoName);
-        setActivityState(true, "SUPPRESSION");
-        try {
-            const r = await fetch(`https://api.github.com/repos/${owner}/${repoName}`, {
-                method: 'DELETE', headers: { 'Authorization': `token ${token}` }
-            });
-            if (r.status === 204 || r.status === 240) {
-                allRepositories = allRepositories.filter(rp => rp.name !== repoName);
-                document.getElementById(`repo-${repoName}`)?.remove();
-                showNotification(`Dépôt supprimé`, 'success');
-            } else throw new Error("Droits insuffisants");
-        } catch(e) { showNotification(e.message, 'danger'); }
-        finally { setActivityState(false); }
-    }
-
-    // ---------- AFFICHAGE DE LA LISTE (avec bouton BACK) ----------
+    // ---------- AFFICHAGE DE LA LISTE (avec panneaux de confirmation) ----------
     function renderRepos(repos) {
         const container = document.getElementById('repoListContainer');
         container.innerHTML = "";
@@ -721,14 +741,24 @@
                     <button class="action-btn btn-json" onclick="playHum60Hz(); copyGitFile('${repo.owner.login}', '${repo.name}', 'manifest.json')">JSON</button>
                     <button class="action-btn btn-sw" onclick="playHum60Hz(); copyGitFile('${repo.owner.login}', '${repo.name}', 'sw.js')">SW</button>
                     <button class="action-btn btn-view" onclick="playHum60Hz(); viewLivePage('${repo.owner.login}', '${repo.name}')">VIEW</button>
-                    <button class="action-btn btn-back" onclick="playHum60Hz(); revertToPreviousCommit('${repo.owner.login}', '${repo.name}', '${repo.default_branch}')">BACK</button>
+                    <button class="action-btn btn-back" onclick="playHum60Hz(); showRollbackConfirmPanel('${repo.name}', '${repo.owner.login}', '${repo.default_branch}')">BACK</button>
                     <button class="action-btn btn-sup" onclick="playHum60Hz(); showConfirmPanel('${repo.name}')">SUP</button>
                 </div>
+                <!-- Panneau de confirmation pour le rollback -->
+                <div class="confirm-panel" id="confirm-rollback-${repo.name}" style="display:none;">
+                    <span style="color:var(--orange); font-weight:bold;">⚠️ Restaurer l'état précédent du dépôt ${repo.name} ?</span>
+                    <span style="font-size:10px;">Cette action remplacera index.html, manifest.json, sw.js et icon.png par la version du commit antérieur.</span>
+                    <div class="confirm-buttons">
+                        <button class="confirm-btn" style="background:linear-gradient(135deg, #f85149, #bd2c26); color:white;" onclick="playHum60Hz(); confirmedRollback('${repo.owner.login}', '${repo.name}', '${repo.default_branch}')">CONFIRMER</button>
+                        <button class="confirm-btn" style="background:linear-gradient(135deg, #444, #222); color:white;" onclick="playHum60Hz(); hideRollbackConfirmPanel('${repo.name}')">ANNULER</button>
+                    </div>
+                </div>
+                <!-- Panneau de confirmation pour la suppression -->
                 <div class="confirm-panel" id="confirm-${repo.name}" style="display:none;">
                     <span style="color:var(--danger); font-weight:bold;">Supprimer définitivement ${repo.name} ?</span>
                     <div class="confirm-buttons">
-                        <button class="confirm-btn" style="background:#f85149; color:white;" onclick="playHum60Hz(); deleteRepository('${repo.owner.login}', '${repo.name}')">CONFIRMER</button>
-                        <button class="confirm-btn" style="background:#444; color:white;" onclick="playHum60Hz(); hideConfirmPanel('${repo.name}')">ANNULER</button>
+                        <button class="confirm-btn" style="background:linear-gradient(135deg, #f85149, #bd2c26); color:white;" onclick="playHum60Hz(); deleteRepository('${repo.owner.login}', '${repo.name}')">CONFIRMER</button>
+                        <button class="confirm-btn" style="background:linear-gradient(135deg, #444, #222); color:white;" onclick="playHum60Hz(); hideConfirmPanel('${repo.name}')">ANNULER</button>
                     </div>
                 </div>
                 <div class="tracker-terminal" id="tracker-${repo.name}"><div class="tracker-header"><span>⛁ ROLLBACK LOGS</span><span>⚡ temps réel</span></div></div>
