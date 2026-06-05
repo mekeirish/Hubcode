@@ -196,6 +196,17 @@
             filter: grayscale(0.1);
         }
 
+        /* Nouveau style pour le bouton injecteur (translucide) */
+        .btn-inject {
+            background: rgba(255, 202, 40, 0.12);
+            border: 1px solid rgba(255, 202, 40, 0.25);
+            color: #ffdd99;
+            text-shadow: 0 0 1px rgba(0,0,0,0.5);
+        }
+        .btn-inject:active {
+            background: rgba(255, 202, 40, 0.25);
+        }
+
         .btn-html { color: var(--blue); border-bottom: 2px solid rgba(88, 166, 255, 0.3); }
         .btn-json { color: var(--accent); border-bottom: 2px solid rgba(255, 202, 40, 0.3); }
         .btn-sw { color: var(--success); border-bottom: 2px solid rgba(126, 231, 135, 0.3); }
@@ -493,6 +504,119 @@
     }
     function disableBackBtn(repoName, disabled) { const btn = document.querySelector(`#repo-${repoName} .btn-back`); if(btn) btn.disabled = disabled; }
 
+    // ---------- INJECTION PWA DANS index.html (NOUVEAU) ----------
+    async function injectPwaToRepo(owner, repo, branch) {
+        const token = localStorage.getItem('hubcode_token');
+        if (!token) { showNotification("Token manquant", "danger"); return; }
+        const logRepo = repo;
+        clearTracker(logRepo);
+        showTracker(logRepo);
+        setActivityState(true, `INJECTION ${repo}`);
+        addLog(logRepo, `Début injection PWA sur ${owner}/${repo}`, 'step');
+
+        try {
+            // 1. Récupérer le contenu actuel de index.html
+            addLog(logRepo, "Récupération de index.html...", 'loading');
+            const getResp = await fetch(`https://api.github.com/repos/${owner}/${repo}/contents/index.html?ref=${branch}`, {
+                headers: { 'Authorization': `token ${token}` }
+            });
+            let currentSha = null;
+            let originalHtml = "";
+            if (getResp.status === 200) {
+                const data = await getResp.json();
+                currentSha = data.sha;
+                originalHtml = b64ToUtf8(data.content);
+                addLog(logRepo, "Fichier récupéré", 'success');
+            } else if (getResp.status === 404) {
+                addLog(logRepo, "index.html introuvable, création d'un fichier minimal", 'warning');
+                originalHtml = `<!DOCTYPE html><html><head><title>${repo}</title></head><body><h1>${repo}</h1>
+<script>if('serviceWorker' in navigator){window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js'));}</script>
+</body></html>`;
+                currentSha = null;
+            } else {
+                throw new Error(`HTTP ${getResp.status}`);
+            }
+
+            // 2. Injecter les balises PWA
+            const headElements = `
+<link rel="manifest" href="./manifest.json">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#4b6cb7">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="apple-touch-icon" href="icon.png">
+`;
+            const swScript = `
+<script>
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('./sw.js')
+        .then(reg => console.log('Service Worker enregistré !'))
+        .catch(err => console.error('Erreur SW :', err));
+    });
+  }
+<\/script>
+`;
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(originalHtml, 'text/html');
+            if (doc.head) {
+                doc.head.insertAdjacentHTML('beforeend', headElements);
+            } else {
+                doc.documentElement.insertAdjacentHTML('afterbegin', '<head>' + headElements + '</head>');
+            }
+            if (doc.body) {
+                doc.body.insertAdjacentHTML('beforeend', swScript);
+            } else {
+                doc.documentElement.insertAdjacentHTML('beforeend', '<body>' + swScript + '</body>');
+            }
+            let updatedHtml = doc.documentElement.outerHTML;
+            if (!originalHtml.toLowerCase().includes('<!doctype html>')) {
+                updatedHtml = '<!DOCTYPE html>\n' + updatedHtml;
+            }
+
+            const b64Content = utf8ToB64(updatedHtml);
+            addLog(logRepo, "Balises PWA injectées", 'success');
+
+            // 3. Mettre à jour sur GitHub
+            addLog(logRepo, "Envoi de la mise à jour...", 'loading');
+            const putBody = {
+                message: "Hubcode: injection PWA (manifest + service worker)",
+                content: b64Content,
+                branch: branch
+            };
+            if (currentSha) putBody.sha = currentSha;
+            const putResp = await fetch(`https://api.github.com/repos/${owner}/${repo}/contents/index.html`, {
+                method: 'PUT',
+                headers: { 'Authorization': `token ${token}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify(putBody)
+            });
+            if (!putResp.ok) {
+                const errData = await putResp.json();
+                throw new Error(errData.message || "Erreur lors de la mise à jour");
+            }
+            addLog(logRepo, "Fichier mis à jour avec succès !", 'success');
+            showNotification(`Injection PWA terminée pour ${repo}`, 'success');
+        } catch (err) {
+            addLog(logRepo, `ERREUR : ${err.message}`, 'error');
+            showNotification(`Échec injection sur ${repo} : ${err.message}`, 'danger');
+        } finally {
+            setActivityState(false);
+            // Optionnel : rafraîchir l'affichage ? on laisse tel quel.
+        }
+    }
+
+    // ---------- PANNEaux de confirmation pour injection ----------
+    function showInjectConfirmPanel(repoName, owner, branch) {
+        hideRollbackConfirmPanel(repoName);
+        hideConfirmPanel(repoName);
+        const panel = document.getElementById(`confirm-inject-${repoName}`);
+        if (panel) panel.style.display = 'flex';
+    }
+    function hideInjectConfirmPanel(repoName) {
+        const panel = document.getElementById(`confirm-inject-${repoName}`);
+        if (panel) panel.style.display = 'none';
+    }
+
     // ---------- ROLLBACK COMPLET (4 fichiers PWA) ----------
     const PWA_FILES = ['index.html', 'manifest.json', 'sw.js', 'icon.png'];
 
@@ -658,9 +782,9 @@
         }
     }
 
-    // ---------- GESTION DES CONFIRMATIONS (rollback et suppression) ----------
+    // ---------- GESTION DES CONFIRMATIONS (rollback et suppression et injection) ----------
     function showRollbackConfirmPanel(repoName, owner, defaultBranch) {
-        // Masquer l'autre panneau si ouvert
+        hideInjectConfirmPanel(repoName);
         hideConfirmPanel(repoName);
         const panel = document.getElementById(`confirm-rollback-${repoName}`);
         if (panel) panel.style.display = 'flex';
@@ -670,8 +794,8 @@
         if (panel) panel.style.display = 'none';
     }
     function showConfirmPanel(repoName) {
-        // Masquer le panneau de rollback
         hideRollbackConfirmPanel(repoName);
+        hideInjectConfirmPanel(repoName);
         const panel = document.getElementById(`confirm-${repoName}`);
         if (panel) panel.style.display = 'flex';
     }
@@ -679,10 +803,13 @@
         const panel = document.getElementById(`confirm-${repoName}`);
         if (panel) panel.style.display = 'none';
     }
-    // Fonction déclenchée après confirmation du rollback
     async function confirmedRollback(owner, repo, defaultBranch) {
         hideRollbackConfirmPanel(repo);
         await revertToPreviousCommit(owner, repo, defaultBranch);
+    }
+    async function confirmedInject(owner, repo, branch) {
+        hideInjectConfirmPanel(repo);
+        await injectPwaToRepo(owner, repo, branch);
     }
     async function deleteRepository(owner, repoName) {
         const token = localStorage.getItem('hubcode_token');
@@ -722,7 +849,7 @@
         window.open(`https://${owner.toLowerCase()}.github.io/${repo}/?t=${Date.now()}`, '_blank');
     }
 
-    // ---------- AFFICHAGE DE LA LISTE (avec panneaux de confirmation) ----------
+    // ---------- AFFICHAGE DE LA LISTE (avec nouveau bouton injecteur et son panneau) ----------
     function renderRepos(repos) {
         const container = document.getElementById('repoListContainer');
         container.innerHTML = "";
@@ -737,12 +864,23 @@
             div.innerHTML = `
                 <div class="repo-header"><span>${repo.name}</span></div>
                 <div class="repo-actions-row">
+                    <!-- Nouveau bouton injecteur (translucide) -->
+                    <button class="action-btn btn-inject" onclick="playHum60Hz(); showInjectConfirmPanel('${repo.name}', '${repo.owner.login}', '${repo.default_branch}')">💉 INJECT</button>
                     <button class="action-btn btn-html" onclick="playHum60Hz(); copyGitFile('${repo.owner.login}', '${repo.name}', 'index.html')">HTML</button>
                     <button class="action-btn btn-json" onclick="playHum60Hz(); copyGitFile('${repo.owner.login}', '${repo.name}', 'manifest.json')">JSON</button>
                     <button class="action-btn btn-sw" onclick="playHum60Hz(); copyGitFile('${repo.owner.login}', '${repo.name}', 'sw.js')">SW</button>
                     <button class="action-btn btn-view" onclick="playHum60Hz(); viewLivePage('${repo.owner.login}', '${repo.name}')">VIEW</button>
                     <button class="action-btn btn-back" onclick="playHum60Hz(); showRollbackConfirmPanel('${repo.name}', '${repo.owner.login}', '${repo.default_branch}')">BACK</button>
                     <button class="action-btn btn-sup" onclick="playHum60Hz(); showConfirmPanel('${repo.name}')">SUP</button>
+                </div>
+                <!-- Panneau de confirmation pour l'injection PWA -->
+                <div class="confirm-panel" id="confirm-inject-${repo.name}" style="display:none;">
+                    <span style="color:var(--accent); font-weight:bold;">🔧 Injecter les balises PWA dans index.html ?</span>
+                    <span style="font-size:10px;">Cette action ajoutera le manifest, le viewport, le thème et l'enregistrement du service worker.</span>
+                    <div class="confirm-buttons">
+                        <button class="confirm-btn" style="background:linear-gradient(135deg, #ffca28, #b88a00); color:#111;" onclick="playHum60Hz(); confirmedInject('${repo.owner.login}', '${repo.name}', '${repo.default_branch}')">INJECTER</button>
+                        <button class="confirm-btn" style="background:linear-gradient(135deg, #444, #222); color:white;" onclick="playHum60Hz(); hideInjectConfirmPanel('${repo.name}')">ANNULER</button>
+                    </div>
                 </div>
                 <!-- Panneau de confirmation pour le rollback -->
                 <div class="confirm-panel" id="confirm-rollback-${repo.name}" style="display:none;">
@@ -761,7 +899,7 @@
                         <button class="confirm-btn" style="background:linear-gradient(135deg, #444, #222); color:white;" onclick="playHum60Hz(); hideConfirmPanel('${repo.name}')">ANNULER</button>
                     </div>
                 </div>
-                <div class="tracker-terminal" id="tracker-${repo.name}"><div class="tracker-header"><span>⛁ ROLLBACK LOGS</span><span>⚡ temps réel</span></div></div>
+                <div class="tracker-terminal" id="tracker-${repo.name}"><div class="tracker-header"><span>⛁ ROLLBACK & INJECTION LOGS</span><span>⚡ temps réel</span></div></div>
             `;
             container.appendChild(div);
         });
@@ -771,7 +909,5 @@
         window.addEventListener('load', () => navigator.serviceWorker.register('./sw.js').catch(e => console.log("SW not available")));
     }
 </script>
-
-<script>if('serviceWorker' in navigator){window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js'));}</script>
 </body>
 </html>
