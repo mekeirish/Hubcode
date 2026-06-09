@@ -395,7 +395,6 @@
     let allRepositories = [];
     let audioCtx = null;
     let upModeState = {}; // { repoName: bool }
-    let uploadingInProgress = {}; // { repoName: bool }
 
     // ---------- CONVERSIONS UTF-8 / BASE64 FIABLES ----------
     function b64ToUtf8(b64) {
@@ -533,11 +532,6 @@
 
     // ---------- MODE UP : toggle & désactivation ----------
     function toggleUpMode(buttonEl, repoName) {
-        // Si une opération est en cours, interdire le changement d'état
-        if (uploadingInProgress[repoName]) {
-            addLog(repoName, "Upload en cours, impossible de désactiver le mode UP maintenant", "warning");
-            return;
-        }
         const isActive = upModeState[repoName] || false;
         if (isActive) {
             // désactiver
@@ -564,11 +558,6 @@
 
     // ---------- HANDLE FILE ACTION (selon mode UP) ----------
     async function handleFileAction(owner, repo, filename, branch, buttonElement) {
-        // Vérifier si une opération est déjà en cours pour ce repo
-        if (uploadingInProgress[repo]) {
-            addLog(repo, "Une opération est déjà en cours, veuillez patienter", "warning");
-            return;
-        }
         if (upModeState[repo]) {
             // Mode UP actif : coller depuis presse-papiers
             await pasteToGitFile(owner, repo, filename, branch, buttonElement);
@@ -586,14 +575,8 @@
             return;
         }
 
-        // Verrouiller l'opération pour ce repo
-        uploadingInProgress[repo] = true;
-        const upButton = document.querySelector(`#repo-${repo} .btn-up`);
-        
-        // Activer les styles visuels
+        // Ajout du clignotement rouge
         buttonElement.classList.add('btn-flash-red');
-        if (upButton) upButton.classList.add('btn-up-active');
-        
         setActivityState(true, `UP ${filename.toUpperCase()}`);
         showTracker(repo);
         addLog(repo, `Mode UP : collage de ${filename} depuis le presse-papiers...`, "step");
@@ -652,13 +635,10 @@
             addLog(repo, `ERREUR : ${err.message}`, "error");
             showNotification(`Échec UP pour ${filename} : ${err.message}`, "danger");
         } finally {
-            // Retirer les styles visuels
+            // Retirer le clignotement
             buttonElement.classList.remove('btn-flash-red');
-            if (upButton) upButton.classList.remove('btn-up-active');
             // Désactiver le mode UP pour ce repo
             disableUpModeForRepo(repo);
-            // Déverrouiller l'opération
-            uploadingInProgress[repo] = false;
             setActivityState(false);
         }
     }
