@@ -15,6 +15,7 @@
             --success: #7ee787; 
             --blue: #58a6ff;
             --orange: #ffa726;
+            --up-active: #00ff88;
         }
         
         body { 
@@ -194,6 +195,28 @@
             filter: grayscale(0.1);
         }
 
+        /* Mode UP styles */
+        .btn-up {
+            background: linear-gradient(135deg, #2c2c33, #1c1c22);
+            color: #b0b0c0;
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+        .btn-up-active {
+            background: var(--up-active) !important;
+            color: #111 !important;
+            box-shadow: 0 0 15px var(--up-active), inset 0 0 5px rgba(255,255,255,0.6) !important;
+            font-weight: bold !important;
+            border-color: transparent !important;
+        }
+        .btn-flash-red {
+            animation: flashRed 0.5s infinite !important;
+        }
+        @keyframes flashRed {
+            0% { background: linear-gradient(135deg, #26262b, #16161a); box-shadow: none; color: var(--text); }
+            50% { background: #f85149; box-shadow: 0 0 15px #f85149; color: white; border-color: #f85149; }
+            100% { background: linear-gradient(135deg, #26262b, #16161a); box-shadow: none; color: var(--text); }
+        }
+
         /* Nouveau style pour le bouton injecteur (translucide) */
         .btn-inject {
             background: rgba(255, 202, 40, 0.12);
@@ -371,6 +394,8 @@
 <script>
     let allRepositories = [];
     let audioCtx = null;
+    let upModeState = {}; // { repoName: bool }
+    let uploadingInProgress = {}; // { repoName: bool }
 
     // ---------- CONVERSIONS UTF-8 / BASE64 FIABLES ----------
     function b64ToUtf8(b64) {
@@ -482,7 +507,7 @@
                 const newTracker = document.createElement('div');
                 newTracker.id = `tracker-${repoName}`;
                 newTracker.className = 'tracker-terminal';
-                newTracker.innerHTML = `<div class="tracker-header"><span>⛁ ROLLBACK LOGS</span><span>⚡ temps réel</span></div>`;
+                newTracker.innerHTML = `<div class="tracker-header"><span>⛁ ROLLBACK & INJECTION & UP LOGS</span><span>⚡ temps réel</span></div>`;
                 repoDiv.appendChild(newTracker);
                 el = newTracker;
             }
@@ -491,7 +516,7 @@
     }
 
     function showTracker(repoName) { const t = getTracker(repoName); if(t) t.style.display = "flex"; }
-    function clearTracker(repoName) { const t = getTracker(repoName); if(t) t.innerHTML = `<div class="tracker-header"><span>⛁ ROLLBACK LOGS</span><span>⚡ temps réel</span></div>`; }
+    function clearTracker(repoName) { const t = getTracker(repoName); if(t) t.innerHTML = `<div class="tracker-header"><span>⛁ ROLLBACK & INJECTION & UP LOGS</span><span>⚡ temps réel</span></div>`; }
     function addLog(repoName, message, status = "step") {
         const t = getTracker(repoName);
         if (!t) return;
@@ -506,7 +531,139 @@
     }
     function disableBackBtn(repoName, disabled) { const btn = document.querySelector(`#repo-${repoName} .btn-back`); if(btn) btn.disabled = disabled; }
 
-    // ---------- INJECTION PWA DANS index.html (NOUVEAU) ----------
+    // ---------- MODE UP : toggle & désactivation ----------
+    function toggleUpMode(buttonEl, repoName) {
+        // Si une opération est en cours, interdire le changement d'état
+        if (uploadingInProgress[repoName]) {
+            addLog(repoName, "Upload en cours, impossible de désactiver le mode UP maintenant", "warning");
+            return;
+        }
+        const isActive = upModeState[repoName] || false;
+        if (isActive) {
+            // désactiver
+            upModeState[repoName] = false;
+            buttonEl.classList.remove('btn-up-active');
+            addLog(repoName, "Mode UP désactivé", "warning");
+        } else {
+            // activer
+            upModeState[repoName] = true;
+            buttonEl.classList.add('btn-up-active');
+            addLog(repoName, "Mode UP activé – cliquez sur HTML, JSON ou SW pour coller depuis le presse-papiers", "success");
+            showTracker(repoName);
+        }
+    }
+
+    function disableUpModeForRepo(repoName) {
+        if (upModeState[repoName]) {
+            upModeState[repoName] = false;
+            const upBtn = document.querySelector(`#repo-${repoName} .btn-up`);
+            if (upBtn) upBtn.classList.remove('btn-up-active');
+            addLog(repoName, "Mode UP désactivé automatiquement", "warning");
+        }
+    }
+
+    // ---------- HANDLE FILE ACTION (selon mode UP) ----------
+    async function handleFileAction(owner, repo, filename, branch, buttonElement) {
+        // Vérifier si une opération est déjà en cours pour ce repo
+        if (uploadingInProgress[repo]) {
+            addLog(repo, "Une opération est déjà en cours, veuillez patienter", "warning");
+            return;
+        }
+        if (upModeState[repo]) {
+            // Mode UP actif : coller depuis presse-papiers
+            await pasteToGitFile(owner, repo, filename, branch, buttonElement);
+        } else {
+            // Mode normal : copier le fichier distant
+            await copyGitFile(owner, repo, filename);
+        }
+    }
+
+    // ---------- PASTE (UP) depuis presse-papiers vers GitHub ----------
+    async function pasteToGitFile(owner, repo, filename, branch, buttonElement) {
+        const token = localStorage.getItem('hubcode_token');
+        if (!token) {
+            showNotification("Token manquant", "danger");
+            return;
+        }
+
+        // Verrouiller l'opération pour ce repo
+        uploadingInProgress[repo] = true;
+        const upButton = document.querySelector(`#repo-${repo} .btn-up`);
+        
+        // Activer les styles visuels
+        buttonElement.classList.add('btn-flash-red');
+        if (upButton) upButton.classList.add('btn-up-active');
+        
+        setActivityState(true, `UP ${filename.toUpperCase()}`);
+        showTracker(repo);
+        addLog(repo, `Mode UP : collage de ${filename} depuis le presse-papiers...`, "step");
+
+        try {
+            // 1. Lire le presse-papiers
+            addLog(repo, "Lecture du presse-papiers...", "loading");
+            let clipboardText = "";
+            try {
+                clipboardText = await navigator.clipboard.readText();
+                if (!clipboardText || clipboardText.trim() === "") throw new Error("Presse-papiers vide");
+                addLog(repo, `Contenu lu (${clipboardText.length} caractères)`, "success");
+            } catch (err) {
+                throw new Error(`Impossible de lire le presse-papiers: ${err.message}`);
+            }
+
+            // 2. Récupérer le SHA actuel du fichier (si existe)
+            addLog(repo, `Récupération du SHA actuel de ${filename}...`, "loading");
+            let currentSha = null;
+            const getUrl = `https://api.github.com/repos/${owner}/${repo}/contents/${filename}?ref=${branch}`;
+            const getResp = await fetch(getUrl, { headers: { 'Authorization': `token ${token}` } });
+            if (getResp.status === 200) {
+                const data = await getResp.json();
+                currentSha = data.sha;
+                addLog(repo, `SHA existant récupéré`, "success");
+            } else if (getResp.status === 404) {
+                addLog(repo, `Fichier ${filename} inexistant, création imminente`, "warning");
+            } else {
+                throw new Error(`Erreur GET (${getResp.status})`);
+            }
+
+            // 3. Préparer le contenu en Base64
+            const b64Content = utf8ToB64(clipboardText);
+            addLog(repo, `Contenu converti en Base64`, "success");
+
+            // 4. Push vers GitHub
+            addLog(repo, `Envoi vers ${filename}...`, "loading");
+            const putBody = {
+                message: `Hubcode: fast UP update via clipboard (${filename})`,
+                content: b64Content,
+                branch: branch
+            };
+            if (currentSha) putBody.sha = currentSha;
+            const putResp = await fetch(`https://api.github.com/repos/${owner}/${repo}/contents/${filename}`, {
+                method: 'PUT',
+                headers: { 'Authorization': `token ${token}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify(putBody)
+            });
+            if (!putResp.ok) {
+                const errData = await putResp.json();
+                throw new Error(errData.message || `Échec PUT (${putResp.status})`);
+            }
+            addLog(repo, `✅ ${filename} mis à jour avec succès !`, "success");
+            showNotification(`${filename} mis à jour depuis presse-papiers`, "success");
+        } catch (err) {
+            addLog(repo, `ERREUR : ${err.message}`, "error");
+            showNotification(`Échec UP pour ${filename} : ${err.message}`, "danger");
+        } finally {
+            // Retirer les styles visuels
+            buttonElement.classList.remove('btn-flash-red');
+            if (upButton) upButton.classList.remove('btn-up-active');
+            // Désactiver le mode UP pour ce repo
+            disableUpModeForRepo(repo);
+            // Déverrouiller l'opération
+            uploadingInProgress[repo] = false;
+            setActivityState(false);
+        }
+    }
+
+    // ---------- INJECTION PWA DANS index.html ----------
     async function injectPwaToRepo(owner, repo, branch) {
         const token = localStorage.getItem('hubcode_token');
         if (!token) { showNotification("Token manquant", "danger"); return; }
@@ -601,7 +758,6 @@
             showNotification(`Échec injection sur ${repo} : ${err.message}`, 'danger');
         } finally {
             setActivityState(false);
-            // Optionnel : rafraîchir l'affichage ? on laisse tel quel.
         }
     }
 
@@ -864,11 +1020,11 @@
             div.innerHTML = `
                 <div class="repo-header"><span>${repo.name}</span></div>
                 <div class="repo-actions-row">
-                    <!-- Nouveau bouton injecteur (translucide) -->
                     <button class="action-btn btn-inject" onclick="playHum60Hz(); showInjectConfirmPanel('${repo.name}', '${repo.owner.login}', '${repo.default_branch}')">💉 INJECT</button>
-                    <button class="action-btn btn-html" onclick="playHum60Hz(); copyGitFile('${repo.owner.login}', '${repo.name}', 'index.html')">HTML</button>
-                    <button class="action-btn btn-json" onclick="playHum60Hz(); copyGitFile('${repo.owner.login}', '${repo.name}', 'manifest.json')">JSON</button>
-                    <button class="action-btn btn-sw" onclick="playHum60Hz(); copyGitFile('${repo.owner.login}', '${repo.name}', 'sw.js')">SW</button>
+                    <button class="action-btn btn-up" onclick="playHum60Hz(); toggleUpMode(this, '${repo.name}')">UP</button>
+                    <button class="action-btn btn-html" onclick="playHum60Hz(); handleFileAction('${repo.owner.login}', '${repo.name}', 'index.html', '${repo.default_branch}', this)">HTML</button>
+                    <button class="action-btn btn-json" onclick="playHum60Hz(); handleFileAction('${repo.owner.login}', '${repo.name}', 'manifest.json', '${repo.default_branch}', this)">JSON</button>
+                    <button class="action-btn btn-sw" onclick="playHum60Hz(); handleFileAction('${repo.owner.login}', '${repo.name}', 'sw.js', '${repo.default_branch}', this)">SW</button>
                     <button class="action-btn btn-view" onclick="playHum60Hz(); viewLivePage('${repo.owner.login}', '${repo.name}')">VIEW</button>
                     <button class="action-btn btn-back" onclick="playHum60Hz(); showRollbackConfirmPanel('${repo.name}', '${repo.owner.login}', '${repo.default_branch}')">BACK</button>
                     <button class="action-btn btn-sup" onclick="playHum60Hz(); showConfirmPanel('${repo.name}')">SUP</button>
@@ -899,9 +1055,14 @@
                         <button class="confirm-btn" style="background:linear-gradient(135deg, #444, #222); color:white;" onclick="playHum60Hz(); hideConfirmPanel('${repo.name}')">ANNULER</button>
                     </div>
                 </div>
-                <div class="tracker-terminal" id="tracker-${repo.name}"><div class="tracker-header"><span>⛁ ROLLBACK & INJECTION LOGS</span><span>⚡ temps réel</span></div></div>
+                <div class="tracker-terminal" id="tracker-${repo.name}"><div class="tracker-header"><span>⛁ ROLLBACK & INJECTION & UP LOGS</span><span>⚡ temps réel</span></div></div>
             `;
             container.appendChild(div);
+            // Restaurer l'état du mode UP si nécessaire (après réaffichage)
+            if (upModeState[repo.name]) {
+                const upBtn = div.querySelector('.btn-up');
+                if (upBtn) upBtn.classList.add('btn-up-active');
+            }
         });
     }
 
